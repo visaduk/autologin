@@ -164,80 +164,59 @@ async function runAutoLogin(id, login) {
         return;
     }
 
-    // Step 2: Launch GoLogin browser (visible) — navigate to URL directly
-    // Do NOT connect Puppeteer yet — let user pass Cloudflare first
+    // Step 2: Launch GoLogin browser
     log('Launching GoLogin browser (profile: ' + profileId + ')...');
     const gl = new GoLogin({
         token: GOLOGIN_TOKEN,
         profile_id: profileId,
-        extra_params: [
-            '--window-size=1366,900',
-            '--disable-infobars',
-            '--no-first-run',
-            login.url  // Open URL directly — no Puppeteer automation flags
-        ]
     });
 
     sess.gl = gl;
     const { status: glStatus, wsUrl } = await gl.start();
-    log('GoLogin started — browser opened with URL');
+    log('GoLogin browser started');
 
-    // Step 3: Wait for user to pass Cloudflare manually
-    sess.status = 'captcha';
-    log('WAITING: Pass Cloudflare verification in the browser, then automation will continue...');
+    // Step 3: Connect Puppeteer and navigate
+    await sleep(2000); // Wait for browser to be ready
 
-    // Poll: connect Puppeteer once Cloudflare is passed (page has actual TLS content)
-    let browser = null;
-    let page = null;
-    let connected = false;
+    const browser = await puppeteer.connect({ browserWSEndpoint: wsUrl, defaultViewport: null });
+    sess.browser = browser;
 
-    for (let attempt = 0; attempt < 90; attempt++) { // Wait up to 3 minutes
-        await sleep(2000);
+    const pages = await browser.pages();
+    let page = pages[0] || await browser.newPage();
+    sess.page = page;
 
-        if (!sessions.has(id)) return; // Session was stopped
-
-        try {
-            if (!browser) {
-                browser = await puppeteer.connect({ browserWSEndpoint: wsUrl, defaultViewport: null });
-                sess.browser = browser;
-            }
-
-            const pages = await browser.pages();
-            page = pages.find(p => p.url().includes('tlscontact.com') || p.url().includes('vfsglobal.com')) || pages[pages.length - 1];
-            sess.page = page;
-
-            // Check if past Cloudflare
-            const pageContent = await page.evaluate(() => document.body?.innerText || '').catch(() => '');
-            const hasCf = pageContent.includes('Verify you are human') || pageContent.includes('security verification') || pageContent.includes('Just a moment');
-
-            if (!hasCf && page.url().includes('tlscontact.com')) {
-                connected = true;
-                log('Cloudflare passed! Starting automation...');
-                break;
-            }
-
-            if (attempt % 5 === 0) {
-                log('Still waiting for Cloudflare... (' + (attempt * 2) + 's)');
-            }
-        } catch(e) {
-            // Puppeteer connection failed — browser may not be ready yet
-            if (attempt % 10 === 0) log('Waiting for browser... ' + e.message);
-        }
-    }
-
-    if (!connected) {
-        log('Timeout waiting for Cloudflare — browser stays open for manual use');
-        sess.status = 'done';
-        if (browser) await new Promise(resolve => browser.on('disconnected', resolve));
-        try { await gl.stop(); } catch(e) {}
-        sessions.delete(id);
-        return;
-    }
-
-    sess.status = 'running';
     const url = login.url;
     const email = login.email || '';
     const password = login.password || '';
+
+    log('Navigating to ' + url);
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await sleep(2000);
+
+    // Step 4: Check for Cloudflare — wait for user to solve
+    sess.status = 'captcha';
+    log('Checking for Cloudflare...');
+
+    for (let attempt = 0; attempt < 90; attempt++) {
+        if (!sessions.has(id)) return;
+
+        const currentUrl = page.url();
+        const bodyText = await page.evaluate(() => (document.body?.innerText || '')).catch(() => '');
+        const hasCf = bodyText.includes('Verify you are human') || bodyText.includes('Just a moment') || bodyText.includes('security verification');
+
+        if (!hasCf) {
+            log('No Cloudflare (or already passed). Continuing...');
+            break;
+        }
+
+        if (attempt === 0) log('Cloudflare detected — solve it manually in the browser');
+        if (attempt % 5 === 0 && attempt > 0) log('Still waiting for Cloudflare... (' + (attempt * 2) + 's)');
+
+        await sleep(2000);
+    }
+
+    sess.status = 'running';
+    await sleep(1000);
 
     try {
         await sleep(2000);
