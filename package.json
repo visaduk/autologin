@@ -1,0 +1,15 @@
+{
+  "name": "visad-auto-login",
+  "version": "2.0.0",
+  "description": "VisaD Auto Login — GoLogin browser with unique fingerprints",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "gologin": "^3.0.0",
+    "puppeteer-core": "^22.0.0",
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
+}
