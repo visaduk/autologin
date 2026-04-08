@@ -1,15 +1,14 @@
 {
   "name": "visad-auto-login",
-  "version": "3.0.0",
-  "description": "VisaD Auto Login — Stealth Chrome, bypasses Cloudflare",
+  "version": "4.0.0",
+  "description": "VisaD Auto Login — GoLogin with fresh profiles per login",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "puppeteer": "^22.0.0",
+    "gologin": "^3.0.0",
+    "puppeteer-core": "^22.0.0",
     "express": "^4.18.2",
     "cors": "^2.8.5"
   }
