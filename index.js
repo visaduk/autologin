@@ -25,67 +25,11 @@ const MAX_SESSIONS = 10;
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-// profileName → GoLogin profile ID (persisted across restarts)
-const profileCache = {};
+// Single GoLogin profile for all sessions
+const GOLOGIN_PROFILE_ID = '699bf90f5b93b831c628a170';
 const sessions = new Map();
 
 function genId() { return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
-
-// ─── GoLogin Profile Management ──────────────────────────────
-
-async function getOrCreateProfile(loginName) {
-    // Reuse existing profile for same login name
-    const cacheKey = (loginName || 'default').replace(/[^a-zA-Z0-9-]/g, '_').substring(0, 50);
-
-    if (profileCache[cacheKey]) {
-        console.log(`[GoLogin] Reusing profile ${profileCache[cacheKey]} for "${cacheKey}"`);
-        return profileCache[cacheKey];
-    }
-
-    // Create new GoLogin profile via REST API directly
-    console.log(`[GoLogin] Creating new profile for "${cacheKey}"...`);
-    try {
-        const resp = await fetch('https://api.gologin.com/browser', {
-            method: 'POST',
-            headers: {
-                'Authorization': 'Bearer ' + GOLOGIN_TOKEN,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                name: 'VisaD-' + cacheKey,
-                browserType: 'chrome',
-                os: 'mac',
-                navigator: {
-                    language: 'en-GB,en',
-                    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                    resolution: '1366x768',
-                    platform: 'MacIntel'
-                },
-                proxyEnabled: false,
-                proxy: { mode: 'none' }
-            })
-        });
-
-        const text = await resp.text();
-        console.log('[GoLogin] API response status:', resp.status, 'body:', text.substring(0, 500));
-
-        let data;
-        try { data = JSON.parse(text); } catch(e) {
-            throw new Error('Invalid JSON response: ' + text.substring(0, 200));
-        }
-
-        if (data.id) {
-            profileCache[cacheKey] = data.id;
-            console.log(`[GoLogin] Created profile ${data.id}`);
-            return data.id;
-        }
-
-        throw new Error('API error: ' + (data.message || data.error || text.substring(0, 200)));
-    } catch (err) {
-        console.error('[GoLogin] Profile creation failed:', err.message);
-        throw new Error('GoLogin: ' + err.message);
-    }
-}
 
 // ─── API Endpoints ───────────────────────────────────────────
 
@@ -153,19 +97,12 @@ async function runAutoLogin(id, login) {
         if (sess) sess.log.push({ time: now(), msg });
     };
 
-    // Step 1: Get or create GoLogin profile
-    log('Getting GoLogin profile...');
-    let profileId;
-    try {
-        profileId = await getOrCreateProfile(login.profile_name || login.email || 'default');
-    } catch (err) {
-        log('Failed to get GoLogin profile: ' + err.message);
-        sess.status = 'error';
-        return;
-    }
+    // Step 1: Use fixed GoLogin profile
+    const profileId = GOLOGIN_PROFILE_ID;
+    log('Using GoLogin profile: ' + profileId);
 
     // Step 2: Launch GoLogin browser
-    log('Launching GoLogin browser (profile: ' + profileId + ')...');
+    log('Launching GoLogin browser...');
     const gl = new GoLogin({
         token: GOLOGIN_TOKEN,
         profile_id: profileId,
