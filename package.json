@@ -1,14 +1,14 @@
 {
   "name": "visad-auto-login",
-  "version": "4.0.0",
-  "description": "VisaD Auto Login — GoLogin with fresh profiles per login",
+  "version": "5.0.0",
+  "description": "VisaD Auto Login — puppeteer-real-browser, bypasses Cloudflare",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "gologin": "^3.0.0",
-    "puppeteer-core": "^22.0.0",
+    "puppeteer-real-browser": "^1.3.10",
     "express": "^4.18.2",
     "cors": "^2.8.5"
   }
