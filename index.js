@@ -104,6 +104,10 @@ async function runAutoLogin(id, login) {
     log('Connecting puppeteer-real-browser (turnstile auto-solve)...');
     let browser, page;
 
+    // Ensure profile directory exists for real-browser logs
+    const profileDir = path.join(__dirname, '.profiles', id);
+    if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
+
     try {
         // Method 1: Try connecting real-browser to GoLogin's WebSocket
         const result = await realConnect({
@@ -112,6 +116,9 @@ async function runAutoLogin(id, login) {
             connectOption: {
                 browserWSEndpoint: wsUrl,
                 defaultViewport: null
+            },
+            customConfig: {
+                userDataDir: profileDir
             },
             disableXvfb: true
         });
